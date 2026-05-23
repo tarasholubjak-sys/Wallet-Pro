@@ -1512,6 +1512,7 @@ fun OverviewScreen(
     var showAddAccountDialog by remember { mutableStateOf(false) }
     var showAddIncomeDialog by remember { mutableStateOf(false) }
     var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var editingAccount by remember { mutableStateOf<com.example.data.Account?>(null) }
 
     var parentWindowOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -1703,7 +1704,7 @@ fun OverviewScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        GridOf3Columns(spacing = 8.dp) {
+                        GridOf4Columns(spacing = 6.dp) {
                             sortedIncomeSources.forEachIndexed { idx, inc ->
                                 val coinKey = "dashboard_income_${inc.name}"
                                 val (icon, tint) = getCategoryDetails(inc.name, isDark, customIcons[inc.name])
@@ -1772,7 +1773,7 @@ fun OverviewScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        GridOf3Columns(spacing = 8.dp) {
+                        GridOf4Columns(spacing = 6.dp) {
                             sortedRealAccounts.forEachIndexed { idx, account ->
                                 val coinKey = "dashboard_account_source_${account.id}"
                                 val targetKey = "dashboard_account_target_${account.id}"
@@ -1803,6 +1804,7 @@ fun OverviewScreen(
                                     onMoveLeftClick = if (idx > 0) { { viewModel.moveAccount(account.name, "real_accounts", sortedRealAccounts, -1) } } else null,
                                     onMoveRightClick = if (idx < sortedRealAccounts.size - 1) { { viewModel.moveAccount(account.name, "real_accounts", sortedRealAccounts, 1) } } else null,
                                     onChangeIconClick = { iconChooserCategoryName = account.name },
+                                    onEditClick = { editingAccount = account },
                                     modifier = Modifier
                                         .onGloballyPositioned { coords ->
                                             dashboardTargetBoundsMap[targetKey] = coords.boundsInWindow()
@@ -1862,7 +1864,7 @@ fun OverviewScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        GridOf3Columns(spacing = 8.dp) {
+                        GridOf4Columns(spacing = 6.dp) {
                             sortedExpenseCategories.forEachIndexed { idx, cat ->
                                 val (icon, tint) = getCategoryDetails(cat.name, isDark, customIcons[cat.name])
                                 val targetKey = "dashboard_category_target_${cat.name}"
@@ -1962,6 +1964,24 @@ fun OverviewScreen(
             onAdd = { name, kind, nature, ccy, initial, rate, months ->
                 viewModel.addAccount(name, kind, nature, ccy, initial, rate, months)
                 showAddAccountDialog = false
+            }
+        )
+    }
+
+    // Edit Account Dialog
+    val currentEditingAcc = editingAccount
+    if (currentEditingAcc != null) {
+        EditAccountDialog(
+            account = currentEditingAcc,
+            isDark = isDark,
+            onDismiss = { editingAccount = null },
+            onSave = { newName, newBalance, displayInTotal ->
+                viewModel.updateAccountDetails(currentEditingAcc.id, newName, newBalance, displayInTotal)
+                editingAccount = null
+            },
+            onDelete = {
+                viewModel.deleteAccount(currentEditingAcc)
+                editingAccount = null
             }
         )
     }
@@ -3609,6 +3629,103 @@ sealed class DraggedCoin {
     data class AccountRef(val account: Account) : DraggedCoin()
 }
 
+@Composable
+fun QuickEntryTile(
+    name: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    isDark: Boolean,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    badgeText: String? = null,
+    isHovered: Boolean = false,
+) {
+    val textPrimary = if (isDark) DesignTokens.DarkTextPrimary else DesignTokens.LightTextPrimary
+    val textSecondary = if (isDark) DesignTokens.DarkTextSecondary else DesignTokens.LightTextSecondary
+    val surfaceColor = if (isDark) DesignTokens.DarkSurfaceCard else DesignTokens.LightSurfaceCard
+    val borderCol = if (isDark) DesignTokens.DarkBorder else DesignTokens.LightBorder
+
+    val hoverScale by animateFloatAsState(targetValue = if (isHovered) 1.15f else if (isSelected) 1.03f else 1.0f)
+
+    Box(
+        modifier = modifier
+            .scale(hoverScale)
+            .height(80.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isHovered) tint.copy(alpha = 0.16f)
+                else if (isSelected) tint.copy(alpha = 0.12f)
+                else surfaceColor
+            )
+            .border(
+                width = if (isHovered) 2.5.dp else if (isSelected) 2.dp else 1.dp,
+                color = if (isHovered) tint else if (isSelected) tint else borderCol,
+                shape = RoundedCornerShape(10.dp)
+            )
+            .padding(6.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(tint.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = tint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
+                Text(
+                    text = name,
+                    color = textPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                if (badgeText != null) {
+                    Text(
+                        text = badgeText,
+                        color = if (isSelected) tint else textSecondary,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
 // Add Transaction Dialog (Full-fledged "3-row structure" CoinKeeper logic with true drag-and-drop gestures)
 @Composable
 fun AddTransactionDialog(
@@ -3894,28 +4011,29 @@ fun AddTransactionDialog(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text("🟢 ДОХОДИ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DesignTokens.IncomeGreen)
                             Spacer(modifier = Modifier.height(8.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(dynamicIncomeSources) { inc ->
+                            GridOf4Columns(spacing = 6.dp) {
+                                dynamicIncomeSources.forEach { inc ->
                                     val isSelected = selectedIncomeSource == inc.name
                                     val coinKey = "income_${inc.name}"
-                                    Box(
+                                    val (icon, _) = getCategoryDetails(inc.name, isDark, customIcons[inc.name])
+
+                                    QuickEntryTile(
+                                        name = inc.name,
+                                        icon = icon,
+                                        tint = DesignTokens.IncomeGreen,
+                                        isDark = isDark,
+                                        isSelected = isSelected,
+                                        badgeText = "Джерело",
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) DesignTokens.IncomeGreen.copy(alpha = 0.2f) else if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
-                                            .border(1.dp, if (isSelected) DesignTokens.IncomeGreen else borderCol, RoundedCornerShape(12.dp))
                                             .makeCoinDraggable(DraggedCoin.Income(inc.name), coinKey)
                                             .clickable {
                                                 selectedIncomeSource = if (isSelected) null else inc.name
                                                 if (selectedIncomeSource != null) {
-                                                    // Clear opposite filters
                                                     selectedExpenseCategory = null
                                                     selectedAccountDest = null
                                                 }
                                             }
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Text(inc.name, color = if (isSelected) textPrimary else textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -3937,25 +4055,37 @@ fun AddTransactionDialog(
                             // Zvidky (Source) horizontal list (Draggable onto Categories)
                             Text("Звідки кошти:", fontSize = 10.sp, color = textSecondary)
                             Spacer(modifier = Modifier.height(4.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(dynamicRealAccounts, key = { it.id }) { acc ->
+                            GridOf4Columns(spacing = 6.dp) {
+                                dynamicRealAccounts.forEach { acc ->
                                     val isSelected = selectedAccountSource?.id == acc.id
                                     val coinKey = "account_source_${acc.id}"
                                     val targetKey = "account_target_${acc.id}"
 
                                     val isHovered = currentHoveredTargetKey == targetKey
-                                    val hoverScale by animateFloatAsState(targetValue = if (isHovered) 1.15f else 1.0f)
 
-                                    Box(
+                                    val (defaultIcon, tint) = when (acc.kind) {
+                                        "cash" -> Icons.Rounded.Payments to Color(0xFF10B981)
+                                        "current" -> Icons.Rounded.CreditCard to Color(0xFF3B82F6)
+                                        "savings" -> Icons.Rounded.Savings to Color(0xFFEC4899)
+                                        "deposit" -> Icons.Rounded.AccountBalance to Color(0xFF8B5CF6)
+                                        else -> Icons.Rounded.Wallet to DesignTokens.RoyalPurple
+                                    }
+                                    val customIconKey = customIcons[acc.name]
+                                    val icon = if (customIconKey != null) {
+                                        CATEGORY_ICONS_MAP[customIconKey] ?: defaultIcon
+                                    } else {
+                                        defaultIcon
+                                    }
+
+                                    QuickEntryTile(
+                                        name = acc.name,
+                                        icon = icon,
+                                        tint = tint,
+                                        isDark = isDark,
+                                        isSelected = isSelected,
+                                        badgeText = formatAmount(acc.currentBalance, acc.currency),
+                                        isHovered = isHovered,
                                         modifier = Modifier
-                                            .scale(hoverScale)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isSelected) DesignTokens.RoyalPurple.copy(alpha = 0.2f) else if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
-                                            .border(
-                                                width = if (isHovered) 2.6.dp else 1.dp,
-                                                color = if (isHovered) DesignTokens.IncomeGreen else if (isSelected) DesignTokens.RoyalPurple else borderCol,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
                                             .onGloballyPositioned { coords ->
                                                 targetBoundsMap[targetKey] = coords.boundsInWindow()
                                             }
@@ -3963,39 +4093,45 @@ fun AddTransactionDialog(
                                             .clickable {
                                                 selectedAccountSource = if (isSelected) null else acc
                                             }
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(acc.name, color = if (isSelected) textPrimary else textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            Text(formatAmount(acc.currentBalance, acc.currency), color = DesignTokens.RoyalPurple, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
+                                    )
                                 }
                             }
 
                             // Kudy (Destination for Transfer)
                             if (selectedAccountSource != null) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text("Переказ на:", fontSize = 10.sp, color = textSecondary)
                                 Spacer(modifier = Modifier.height(4.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(dynamicRealAccounts.filter { it.id != selectedAccountSource?.id }, key = { it.id }) { acc ->
+                                GridOf4Columns(spacing = 6.dp) {
+                                    dynamicRealAccounts.filter { it.id != selectedAccountSource?.id }.forEach { acc ->
                                         val isSelected = selectedAccountDest?.id == acc.id
                                         val targetKey = "account_dest_target_${acc.id}"
 
                                         val isHovered = currentHoveredTargetKey == targetKey
-                                        val hoverScale by animateFloatAsState(targetValue = if (isHovered) 1.15f else 1.0f)
 
-                                        Box(
+                                        val (defaultIcon, tint) = when (acc.kind) {
+                                            "cash" -> Icons.Rounded.Payments to Color(0xFF10B981)
+                                            "current" -> Icons.Rounded.CreditCard to Color(0xFF3B82F6)
+                                            "savings" -> Icons.Rounded.Savings to Color(0xFFEC4899)
+                                            "deposit" -> Icons.Rounded.AccountBalance to Color(0xFF8B5CF6)
+                                            else -> Icons.Rounded.Wallet to DesignTokens.RoyalPurple
+                                        }
+                                        val customIconKey = customIcons[acc.name]
+                                        val icon = if (customIconKey != null) {
+                                            CATEGORY_ICONS_MAP[customIconKey] ?: defaultIcon
+                                        } else {
+                                            defaultIcon
+                                        }
+
+                                        QuickEntryTile(
+                                            name = acc.name,
+                                            icon = icon,
+                                            tint = tint,
+                                            isDark = isDark,
+                                            isSelected = isSelected,
+                                            badgeText = formatAmount(acc.currentBalance, acc.currency),
+                                            isHovered = isHovered,
                                             modifier = Modifier
-                                                .scale(hoverScale)
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(if (isSelected) DesignTokens.RoyalPurple.copy(alpha = 0.2f) else if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
-                                            .border(
-                                                width = if (isHovered) 2.6.dp else 1.dp,
-                                                color = if (isHovered) DesignTokens.RoyalPurple else if (isSelected) DesignTokens.RoyalPurple else borderCol,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
                                                 .onGloballyPositioned { coords ->
                                                     targetBoundsMap[targetKey] = coords.boundsInWindow()
                                                 }
@@ -4007,13 +4143,7 @@ fun AddTransactionDialog(
                                                         selectedIncomeSource = null
                                                     }
                                                 }
-                                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                                        ) {
-                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Text(acc.name, color = if (isSelected) textPrimary else textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                                Text(formatAmount(acc.currentBalance, acc.currency), color = DesignTokens.RoyalPurple, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
+                                        )
                                     }
                                 }
                             }
@@ -4041,43 +4171,34 @@ fun AddTransactionDialog(
                             Text("🔴 КАТЕГОРІЇ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DesignTokens.AlertRose)
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            FlowRowLayout(spacing = 8.dp) {
-                                for (cat in dynamicExpenseCategories) {
+                            GridOf4Columns(spacing = 6.dp) {
+                                dynamicExpenseCategories.forEach { cat ->
                                     val isSelected = selectedExpenseCategory == cat.name
                                     val (icon, tint) = getCategoryDetails(cat.name, isDark, customIcons[cat.name])
                                     val targetKey = "category_target_${cat.name}"
 
                                     val isHovered = currentHoveredTargetKey == targetKey
-                                    val hoverScale by animateFloatAsState(targetValue = if (isHovered) 1.15f else 1.0f)
 
-                                    Box(
+                                    QuickEntryTile(
+                                        name = cat.name,
+                                        icon = icon,
+                                        tint = tint,
+                                        isDark = isDark,
+                                        isSelected = isSelected,
+                                        badgeText = "Витрата",
+                                        isHovered = isHovered,
                                         modifier = Modifier
-                                            .scale(hoverScale)
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(if (isSelected) tint.copy(alpha = 0.2f) else if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
-                                            .border(
-                                                width = if (isHovered) 2.6.dp else 1.dp,
-                                                color = if (isHovered) tint else if (isSelected) tint else borderCol,
-                                                shape = RoundedCornerShape(14.dp)
-                                            )
                                             .onGloballyPositioned { coords ->
                                                 targetBoundsMap[targetKey] = coords.boundsInWindow()
                                             }
                                             .clickable {
                                                 selectedExpenseCategory = if (isSelected) null else cat.name
                                                 if (selectedExpenseCategory != null) {
-                                                    // Clears opposite rows
                                                     selectedIncomeSource = null
                                                     selectedAccountDest = null
                                                 }
                                             }
-                                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-                                            Text(cat.name, color = if (isSelected) textPrimary else textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -4463,6 +4584,157 @@ fun AddAccountDialog(
     )
 }
 
+@Composable
+fun EditAccountDialog(
+    account: com.example.data.Account,
+    isDark: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (newName: String, newBalance: Double, displayInTotal: Boolean) -> Unit,
+    onDelete: () -> Unit
+) {
+    val surfaceColor = if (isDark) DesignTokens.DarkSurfaceCard else DesignTokens.LightSurfaceCard
+    val borderCol = if (isDark) DesignTokens.DarkBorder else DesignTokens.LightBorder
+    val textPrimary = if (isDark) DesignTokens.DarkTextPrimary else DesignTokens.LightTextPrimary
+    val textSecondary = if (isDark) DesignTokens.DarkTextSecondary else DesignTokens.LightTextSecondary
+
+    var nameText by remember { mutableStateOf(account.name) }
+    var balanceText by remember { mutableStateOf(account.currentBalance.toString()) }
+    var displayInTotal by remember { mutableStateOf(account.displayInTotalBalance) }
+
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Видалити рахунок?", color = textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Ви дійсно хочете видалити рахунок \"${account.name}\"? Це також видалить усі пов'язані з ним транзакції для чистоти звітів.", color = textSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Видалити", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Скасувати", color = textSecondary)
+                }
+            },
+            containerColor = surfaceColor,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Редагувати Рахунок", color = textPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Name text entry
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    label = { Text("Назва рахунку", color = textSecondary) },
+                    modifier = Modifier.fillMaxWidth().testTag("edit_account_name_field"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary,
+                        focusedBorderColor = DesignTokens.RoyalPurple, unfocusedBorderColor = borderCol
+                    )
+                )
+
+                // Current Balance Entry
+                OutlinedTextField(
+                    value = balanceText,
+                    onValueChange = { 
+                        if (it.isEmpty() || it == "-" || it.all { ch -> ch.isDigit() || ch == '.' || ch == '-' }) {
+                            balanceText = it
+                        }
+                    },
+                    label = { Text("Поточний баланс (${account.currency})", color = textSecondary) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth().testTag("edit_account_balance_field"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = textPrimary, unfocusedTextColor = textPrimary,
+                        focusedBorderColor = DesignTokens.RoyalPurple, unfocusedBorderColor = borderCol
+                    )
+                )
+
+                // Toggle display in total balance
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+                        .clickable { displayInTotal = !displayInTotal }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Ураховувати в загальному балансі", color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Відображати кошти рахунку на загальній панелі зверху", color = textSecondary, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = displayInTotal,
+                        onCheckedChange = { displayInTotal = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = DesignTokens.RoyalPurple
+                        )
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // DELETE Button (Red styled)
+                Button(
+                    onClick = { showDeleteConfirmation = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.85f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Видалити", color = Color.White)
+                }
+
+                // SAVE Button
+                Button(
+                    onClick = {
+                        val newBal = balanceText.toDoubleOrNull() ?: account.currentBalance
+                        onSave(nameText, newBal, displayInTotal)
+                    },
+                    enabled = nameText.isNotEmpty() && balanceText.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = DesignTokens.RoyalPurple),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.testTag("btn_save_edit_account")
+                ) {
+                    Text("Зберегти", color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Скасувати", color = textSecondary)
+            }
+        },
+        containerColor = surfaceColor,
+        shape = RoundedCornerShape(20.dp),
+        properties = DialogProperties(usePlatformDefaultWidth = true)
+    )
+}
+
 // Dialog to Add/Edit monthly budget limits
 @Composable
 fun AddBudgetDialog(
@@ -4634,6 +4906,54 @@ fun GridOf3Columns(
     }
 }
 
+// Custom responsive grid layout helper that ensures exactly 4 columns fit perfectly in any width
+@Composable
+fun GridOf4Columns(
+    spacing: androidx.compose.ui.unit.Dp = 6.dp,
+    content: @Composable () -> Unit
+) {
+    androidx.compose.ui.layout.Layout(
+        content = content
+    ) { measurables, constraints ->
+        val cols = 4
+        val spacingPx = spacing.roundToPx()
+        val totalSpacing = spacingPx * (cols - 1)
+        val childWidth = ((constraints.maxWidth - totalSpacing) / cols).coerceAtLeast(0)
+        
+        val childConstraints = constraints.copy(
+            minWidth = childWidth,
+            maxWidth = childWidth
+        )
+        
+        val placeables = measurables.map { measurable ->
+            measurable.measure(childConstraints)
+        }
+        
+        var currentY = 0
+        var currentX = 0
+        var maxRowHeight = 0
+        val positions = ArrayList<androidx.compose.ui.unit.IntOffset>()
+        
+        placeables.forEachIndexed { idx, placeable ->
+            if (idx > 0 && idx % cols == 0) {
+                currentX = 0
+                currentY += maxRowHeight + spacingPx
+                maxRowHeight = 0
+            }
+            positions.add(androidx.compose.ui.unit.IntOffset(currentX, currentY))
+            currentX += childWidth + spacingPx
+            maxRowHeight = maxOf(maxRowHeight, placeable.height)
+        }
+        val layoutHeight = currentY + maxRowHeight
+        
+        layout(constraints.maxWidth, layoutHeight) {
+            placeables.forEachIndexed { idx, placeable ->
+                placeable.placeRelative(positions[idx])
+            }
+        }
+    }
+}
+
 @Composable
 fun AddTile(
     text: String,
@@ -4646,15 +4966,15 @@ fun AddTile(
     val borderCol = if (isDark) DesignTokens.DarkBorder else DesignTokens.LightBorder
     Box(
         modifier = modifier
-            .height(90.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(82.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(surfaceColor)
             .border(
-                BorderStroke(1.dp, color.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(16.dp)
+                BorderStroke(1.dp, color.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
-            .padding(10.dp),
+            .padding(6.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -4665,14 +4985,16 @@ fun AddTile(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = text,
                 color = color,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
@@ -4691,7 +5013,8 @@ fun DashboardTile(
     onArchiveClick: (() -> Unit)? = null,
     onMoveLeftClick: (() -> Unit)? = null,
     onMoveRightClick: (() -> Unit)? = null,
-    onChangeIconClick: (() -> Unit)? = null
+    onChangeIconClick: (() -> Unit)? = null,
+    onEditClick: (() -> Unit)? = null
 ) {
     val textPrimary = if (isDark) DesignTokens.DarkTextPrimary else DesignTokens.LightTextPrimary
     val textSecondary = if (isDark) DesignTokens.DarkTextSecondary else DesignTokens.LightTextSecondary
@@ -4704,18 +5027,18 @@ fun DashboardTile(
     Box(
         modifier = modifier
             .scale(hoverScale)
-            .height(90.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(82.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 if (isHovered) tint.copy(alpha = 0.15f)
                 else surfaceColor
             )
             .border(
-                width = if (isHovered) 2.5.dp else 1.dp,
+                width = if (isHovered) 2.dp else 1.dp,
                 color = if (isHovered) tint else borderCol,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(12.dp)
             )
-            .padding(10.dp)
+            .padding(6.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -4729,37 +5052,46 @@ fun DashboardTile(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(32.dp)
                         .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(tint.copy(alpha = 0.1f)),
+                        .background(tint.copy(alpha = 0.12f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = tint,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
-                if (onArchiveClick != null || onMoveLeftClick != null || onMoveRightClick != null || onChangeIconClick != null) {
+                if (onArchiveClick != null || onMoveLeftClick != null || onMoveRightClick != null || onChangeIconClick != null || onEditClick != null) {
                     Box {
                         androidx.compose.material3.IconButton(
                             onClick = { showMenu = true },
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.MoreVert,
                                 contentDescription = "Опції",
                                 tint = textSecondary,
-                                modifier = Modifier.size(14.dp)
-                            )
+                                modifier = Modifier.size(13.dp)
+                              )
                         }
 
                         androidx.compose.material3.DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            if (onEditClick != null) {
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("✏️ Редагувати", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                                    onClick = {
+                                        showMenu = false
+                                        onEditClick()
+                                    }
+                                )
+                            }
                             if (onChangeIconClick != null) {
                                 androidx.compose.material3.DropdownMenuItem(
                                     text = { Text("🎨 Змінити іконку", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
@@ -4801,11 +5133,14 @@ fun DashboardTile(
                 }
             }
 
-            Column {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
                 Text(
                     text = name,
                     color = textPrimary,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -4813,18 +5148,18 @@ fun DashboardTile(
                 if (badgeText != null) {
                     val len = badgeText.length
                     val fSize = when {
-                        len > 12 -> 7.5.sp
-                        len > 9 -> 8.5.sp
+                        len > 10 -> 8.sp
+                        len > 8 -> 8.5.sp
                         else -> 9.5.sp
                     }
                     Text(
                         text = badgeText,
-                        color = textSecondary,
+                        color = tint,
                         fontSize = fSize,
-                        lineHeight = (fSize.value + 1f).sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Clip
+                        lineHeight = (fSize.value + 0.8f).sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }

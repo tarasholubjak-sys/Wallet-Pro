@@ -440,6 +440,47 @@ class FinanceViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateAccountDetails(
+        accountId: Int,
+        newName: String,
+        newBalance: Double,
+        displayInTotal: Boolean
+    ) {
+        viewModelScope.launch {
+            val accountsList = repository.allAccounts.first()
+            val original = accountsList.find { it.id == accountId } ?: return@launch
+            
+            val diff = newBalance - original.currentBalance
+            val updated = original.copy(
+                name = newName,
+                currentBalance = newBalance,
+                displayInTotalBalance = displayInTotal
+            )
+            repository.updateAccount(updated)
+            
+            // Insert a balance_correction transaction if balance changed significantly
+            if (kotlin.math.abs(diff) > 0.001) {
+                repository.insertTransaction(
+                    Transaction(
+                        type = "adjustment",
+                        kind = "balance_correction",
+                        accountId = original.id,
+                        amount = diff,
+                        currency = original.currency,
+                        category = "Коригування балансу",
+                        description = "Ручна зміна балансу з ${original.currentBalance} на $newBalance"
+                    )
+                )
+            }
+        }
+    }
+
+    fun deleteAccount(account: Account) {
+        viewModelScope.launch {
+            repository.deleteAccount(account)
+        }
+    }
+
     // 4. BUDGET ACTIONS
     fun addBudget(category: String, limitAmount: Double) {
         viewModelScope.launch {
